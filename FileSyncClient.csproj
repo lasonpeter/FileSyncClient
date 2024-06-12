@@ -7,4 +7,19 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
+    <ItemGroup>
+      <PackageReference Include="FSWatcher" Version="0.1.0" />
+      <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+      <PackageReference Include="protobuf-net" Version="3.2.30" />
+      <PackageReference Include="Serilog" Version="3.1.1" />
+      <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+      <PackageReference Include="XXHash3.NET" Version="2.1.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Reference Include="TransferLib">
+        <HintPath>..\TransferLib\bin\Release\net8.0\TransferLib.dll</HintPath>
+      </Reference>
+    </ItemGroup>
+
 </Project>
