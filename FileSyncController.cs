@@ -1,6 +1,7 @@
 using System.Net.Sockets;
 using FileSyncClient.FileSynchronization;
 using ProtoBuf;
+using rbnswartz.LinuxIntegration.Notifications;
 using Serilog;
 using TransferLib;
 
@@ -10,23 +11,47 @@ public class FileSyncController
 {
     private Socket _socket;
     public Dictionary<string,FileChange> Queue { get; } = new(0);
-    private Dictionary<byte, SFile?> fileLookup = new();
-    private bool[] availableIds = new bool[256];
-    public FileSyncController(Socket socket)
+    private readonly Dictionary<byte, SFile?> _syncedFilesLookup = new();
+    private readonly bool[] _availableIds = new bool[256];
+    private long _lastAccessTime=0; //For upload time counter
+    private readonly object _socketLock;
+
+    public FileSyncController(Socket socket,object socketLock)
     {
         _socket = socket;
+        _socketLock = socketLock;
     }
 
+    public void Watch()
+    {
+        long timeElapsed = 0;
+        new Thread(_ =>
+        {
+            while(true){
+                timeElapsed = Environment.TickCount64 - _lastAccessTime;
+                if (Queue.Count>0)
+                    Console.WriteLine(timeElapsed);
+                if (timeElapsed > 5_000 && Queue.Count > 0 )
+                {
+                    Console.WriteLine("SYNCING");
+                    Sync();
+                    _lastAccessTime = Environment.TickCount64;
+                }
+                Thread.Sleep(1_000);
+            }
+        }).Start();
+    }
     public void AddNewChange(FileChange fileChange)
     {
         //TODO: CHANGE IT TO SUPPORT NOT ONLY CREATION
-        if(fileChange.FileOperation == FileOperation.FileCreated && !fileChange.FilePath.Contains(".goutputstream"))
+        if(fileChange.FileOperation == FileOperation.FileCreated)
         {
             if (!Queue.TryAdd(fileChange.FilePath, fileChange))
             {
                 Queue.Remove(fileChange.FilePath);
                 Queue.Add(fileChange.FilePath, fileChange);
             }
+            _lastAccessTime = Environment.TickCount64;
         }
     }
 
@@ -37,12 +62,13 @@ public class FileSyncController
         FSInitResponse fsInitResponse = Serializer.Deserialize<FSInitResponse>(memoryStream);
         if (!fsInitResponse.IsAccepted)
         {
-            fileLookup.Remove(fsInitResponse.FileId);
+            _syncedFilesLookup.Remove(fsInitResponse.FileId);
         }
         SFile? sFile;
-        if (fileLookup.TryGetValue(fsInitResponse.FileId, out sFile))
+        if (_syncedFilesLookup.TryGetValue(fsInitResponse.FileId, out sFile))
         {
             Queue.Remove(sFile._filePath);
+            Console.WriteLine("STARTING");
             sFile.StartFileUpload();
         }
     }
@@ -53,22 +79,28 @@ public class FileSyncController
         FSCheckHashResponse fsCheckHashResponse = Serializer.Deserialize<FSCheckHashResponse>(memoryStream);
         if (fsCheckHashResponse.IsCorrect)
         {
-            fileLookup.Remove(fsCheckHashResponse.FileId);
+            _syncedFilesLookup.Remove(fsCheckHashResponse.FileId);
+        }
+        else //TODO THIS IS FOR TESTING
+        {
+            _syncedFilesLookup.Remove(fsCheckHashResponse.FileId);
         }
 
         MemoryStream ms = new MemoryStream();
         Serializer.Serialize(ms,new FSFinish(){FileId = fsCheckHashResponse.FileId});
-        _socket.SendAsync(new Packet(ms.ToArray(), PacketType.FileSyncFinish, (int)ms.Length).ToBytes());
-
+        
+            _socket.SendAsync(new Packet(ms.ToArray(), PacketType.FileSyncFinish, (int)ms.Length).ToBytes());
+        
+        Console.WriteLine("FINISH");
     }
-
+//TODO
     public void ContinuousSync()
     {
         new Thread((o =>
         {
             while (true)
             {
-                if (fileLookup.Count == 0)
+                if (_syncedFilesLookup.Count == 0)
                 {
                     Thread.Sleep(1000);
                     byte x = 0;
@@ -77,9 +109,9 @@ public class FileSyncController
                         {
                             if (x >= 255)
                                 break;
-                            fileLookup.Add(x, new SFile(_socket, fileChange.Value.FilePath, x));
+                            _syncedFilesLookup.Add(x, new SFile(_socket, fileChange.Value.FilePath, x,_socketLock));
                             SFile? sFile;
-                            if (fileLookup.TryGetValue(x, out sFile))
+                            if (_syncedFilesLookup.TryGetValue(x, out sFile))
                                 sFile.SyncFile();
                             x++;
                         }
@@ -93,11 +125,12 @@ public class FileSyncController
 
     public void Sync()
     {
-
+        
         while (true)
         {
-            Console.WriteLine("TRY START");
-            if (fileLookup.Count == 0)
+            //Console.WriteLine("TRY START>");
+            //Console.WriteLine($"Queue: {Queue.Count}, synced file lookup: {_syncedFilesLookup.Count}");
+            if (_syncedFilesLookup.Count == 0)
             {
                 List<string> toRemove = new();
                 Console.WriteLine("START");
@@ -106,33 +139,44 @@ public class FileSyncController
                 {
                     foreach (var fileChange in Queue)
                     {
-                        Console.WriteLine("TAKING");//DON'T TOUCH IT, MAGIC HAPPENS
-                        if (x >= 10)
-                            break;
-                        SFile sfile = new SFile(_socket, fileChange.Value.FilePath, x);
-                        if (sfile.SyncFile())
+                        //Console.WriteLine("TAKING");//DON'T TOUCH IT, MAGIC HAPPENS
+                        if (x >= 1)
                         {
-                            fileLookup.Add(x,sfile );
-                            x++;
+                            break;
+                        }
+                        SFile sFile = new SFile(_socket, fileChange.Value.FilePath, x,_socketLock);
+                        if (sFile.SyncFile())
+                        {
+                            _syncedFilesLookup.Add(x,sFile );
+                            toRemove.Add(fileChange.Key);
                         }
                         else
                         {
                             toRemove.Add(fileChange.Key);
                         }
+                        x++; 
+
                     }
 
                     foreach (var removed in toRemove)
                     {
-                        Queue.Remove(removed);
+                        if (Queue.Remove(removed))
+                        {
+                            Console.WriteLine($"Removed from queue:{removed}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"FAILED from queue:{removed}");
+
+                        }
                     }
                 }
-                Log.Information("Syncing: {filesAmount} files",x);
-                break;
+                Log.Information("Syncing: {filesAm2ount} files",x);
             }
             if(Queue.Count==0)
                 break;
 
-            Thread.Sleep(1_000);
+            Thread.Sleep(100);
         }
     }
 
@@ -140,9 +184,9 @@ public class FileSyncController
     {
         for (byte x = 0; x < 255; x++)
         {
-            if (availableIds[x] == true)
+            if (_availableIds[x] == true)
             {
-                availableIds[x] = false;
+                _availableIds[x] = false;
                 return x;
             }
         }

@@ -8,20 +8,22 @@ namespace FileSyncClient.FileSynchronization;
 
 public class SFile
 {
-    public SFile(Socket socket, string filePath,byte fileId)
+    public SFile(Socket socket, string filePath,byte fileId, object socketLock)
     {
         _socket = socket;
         _filePath = filePath;
         _fileId = fileId;
+        _socketLock = socketLock;
     }
 
     private Socket _socket;
     public string _filePath { get;}
     private byte _fileId;
-
+    private object _socketLock;
 
     public bool SyncFile()
     {
+        Console.WriteLine("SYNCING FILE, ONCEEEEEEEEE ?");
         if (!File.Exists(_filePath))
         {
             Log.Warning("}File doesn't exist {file}, aborting",_filePath);
@@ -29,15 +31,21 @@ public class SFile
         }
         using Stream file = File.OpenRead(_filePath);
         using MemoryStream stream = new MemoryStream();
-        Serializer.Serialize(stream,new FSInit()
+        FileInfo fileInfo = new FileInfo(_filePath);
+        Serializer.Serialize(stream,new FSInit
         {
-            FilePath =  new FileInfo(_filePath).DirectoryName!,
-            FileSize = new FileInfo(_filePath).Length,
             FileId = _fileId,
-            FileName = new FileInfo(_filePath).Name
+            FilePath = fileInfo.DirectoryName!,
+            FileSize =  fileInfo.Length,
+            FileName = fileInfo.Name,
+            LastAccessTime = fileInfo.LastAccessTime,
+            LastWriteTime = fileInfo.LastWriteTime,
+            CreationTime = fileInfo.CreationTime
         });
         Packet packet = new Packet(stream.ToArray(),PacketType.FileSyncInit);
-        _socket.SendAsync(packet.ToBytes());
+        
+            _socket.SendAsync(packet.ToBytes());
+        
         return true;
     }
     
@@ -47,14 +55,15 @@ public class SFile
         Task upload = new Task(() =>
         {
             //Thread.Sleep(5000);
-            //Console.WriteLine("WEEEEEEEEEE");
+            Console.WriteLine("WEEEEEEEEEE");
             using FileStream fileStream = File.OpenRead(_filePath);
             byte[] buffer = new byte[4000];
             int read = 0;
             int x = 0;
             while ((read = fileStream.Read(buffer)) > 0)
             {
-                if (read<10)
+                //Console.WriteLine("heh ?");
+                if (read <= 0)
                 {
                     Log.Error("NOTENOUGH");
                     Console.WriteLine("WEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEZ");
@@ -69,14 +78,20 @@ public class SFile
                 using MemoryStream stream = new MemoryStream();
                 Serializer.Serialize(stream, fsData);
                 Packet packet = new Packet(stream.ToArray(), PacketType.FileSyncData, (int)stream.Length);
-                //Log.Information(stream.Length.ToString());
-                lock (_socket)
+                /*foreach (var VARIABLE in packet.Payload)
                 {
-                    _socket.Send(packet.ToBytes());
+                    Console.Write(VARIABLE);
+                }*/
+                //Log.Information(stream.Length.ToString());
+                
+                {
+                    _socket.SendAsync(packet.ToBytes());
+                    //Console.WriteLine("?");
                 }
                 /*if(_socket.Send(packet.ToBytes()) >4099)
                     Log.Error($"YOU SHIET{stream.Length}");*/
                 x++;
+                //Console.WriteLine(read);
             }
             Console.WriteLine($"WROTE: {x} packets");
             //Console.WriteLine(read);
@@ -95,7 +110,9 @@ public class SFile
                 FileId = _fileId,
                 Hash = hash64
             });
-            _socket.SendAsync(new Packet(memoryStream.ToArray(), PacketType.FileSyncCheckHash).ToBytes());
+            {
+                _socket.Send(new Packet(memoryStream.ToArray(), PacketType.FileSyncCheckHash).ToBytes());
+            }
         });
         upload.Start();
         
