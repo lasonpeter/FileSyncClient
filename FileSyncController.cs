@@ -1,9 +1,13 @@
 using System.Net.Sockets;
+using System.Text;
+using FileSyncClient.FileStructureIntrospection;
 using FileSyncClient.FileSynchronization;
 using ProtoBuf;
 using rbnswartz.LinuxIntegration.Notifications;
+using RocksDbSharp;
 using Serilog;
 using TransferLib;
+using XXHash3NET;
 
 namespace FileSyncClient;
 
@@ -15,9 +19,11 @@ public class FileSyncController
     private readonly bool[] _availableIds = new bool[256];
     private long _lastAccessTime=0; //For upload time counter
     private readonly object _socketLock;
+    private RocksDb _rocksDb;
 
-    public FileSyncController(Socket socket,object socketLock)
+    public FileSyncController(Socket socket,object socketLock,RocksDb rocksDb)
     {
+        _rocksDb = rocksDb;
         _socket = socket;
         _socketLock = socketLock;
     }
@@ -123,6 +129,70 @@ public class FileSyncController
         })).Start();
     }
 
+    public void HashUpdate(DirectoryInfo directoryInfo)
+    {
+        //DirectoryChangeInfo directoryChangeInfo = new DirectoryChangeInfo();
+        if (directoryInfo.GetDirectories().Length > 0)
+        {
+            try
+            {
+                foreach (var dict in directoryInfo.GetDirectories())
+                {
+                    HashUpdate(dict);
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+        }
+        if (directoryInfo.GetFiles().Length > 0)
+        {
+            foreach (var fileInfo in directoryInfo.GetFiles())
+            {
+                try
+                {
+                    //Console.WriteLine(fileInfo.FullName);
+                    if(_rocksDb.HasKey(Encoding.UTF8.GetBytes(fileInfo.FullName)))// Checks if there is a filepath like this in DB
+                    { //Only looks up FUUID and updates the respective HASH
+                        Console.WriteLine("EXISTED");
+                        var fuuid = _rocksDb.Get(Encoding.UTF8.GetBytes(fileInfo.FullName));
+                        
+                        //Generate HASH
+                        ulong hash64;
+                        using var memoryStream = new MemoryStream();
+                        {
+                            hash64 = XXHash3.Hash64(fileInfo.OpenRead());
+                            Console.WriteLine(hash64);
+                        }
+                        _rocksDb.Put(fuuid,BitConverter.GetBytes(hash64));
+                    }
+                    else
+                    { //Adds new FP->FUUID and FUUID->HASH
+                        var fuuid = Guid.NewGuid().ToByteArray();
+                        Console.WriteLine($"CREATING NEW {fuuid.Length}");
+                        Console.WriteLine(BitConverter.ToString(fuuid));
+
+                        _rocksDb.Put(Encoding.UTF8.GetBytes(fileInfo.FullName),fuuid);
+                        ulong hash64;
+                        using var memoryStream = new MemoryStream();
+                        {
+                            hash64 = XXHash3.Hash64(fileInfo.OpenRead());
+                            Console.WriteLine(hash64);
+                        }
+                        _rocksDb.Put(fuuid,BitConverter.GetBytes(hash64));
+                    }
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                }
+            }
+        }
+        //Console.WriteLine($"returning: {fileChangeInfosRoot.Count}");
+        return;
+
+    }
     public void Sync()
     {
         
@@ -178,19 +248,5 @@ public class FileSyncController
 
             Thread.Sleep(100);
         }
-    }
-
-    private byte? GetUniqueId()
-    {
-        for (byte x = 0; x < 255; x++)
-        {
-            if (_availableIds[x] == true)
-            {
-                _availableIds[x] = false;
-                return x;
-            }
-        }
-
-        return null;
     }
 }

@@ -36,11 +36,12 @@ public class SFile
         {
             FileId = _fileId,
             FilePath = fileInfo.DirectoryName!,
-            FileSize =  fileInfo.Length,
+            FileSize = fileInfo.Length,
             FileName = fileInfo.Name,
             LastAccessTime = fileInfo.LastAccessTime,
             LastWriteTime = fileInfo.LastWriteTime,
-            CreationTime = fileInfo.CreationTime
+            CreationTime = fileInfo.CreationTime,
+            FuuId = Guid.NewGuid().ToByteArray()
         });
         Packet packet = new Packet(stream.ToArray(),PacketType.FileSyncInit);
         
