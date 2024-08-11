@@ -130,9 +130,10 @@ class Program
                 packetDistributor.VersionHandshake();
                 packetDistributor.Ping();
                 //Start up file watcher
-                FileWatcher fileWatcher = new FileWatcher(fileSyncController);
-                fileWatcher.LoadObjects(settings.SynchronizedObjects);
+                FileWatcher fileWatcher = new FileWatcher(fileSyncController,rocksDb);
+                fileWatcher.LoadSynchronizedObjects(settings.SynchronizedObjects);
                 fileWatcher.AddScanner();
+                fileWatcher.UpdateSyncedFilesHashes();
                 packetDistributor.AwaitPacket();
                 Console.WriteLine("DISCONNECTED");
             }

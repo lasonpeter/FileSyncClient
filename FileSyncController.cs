@@ -61,13 +61,19 @@ public class FileSyncController
         }
     }
 
-    public void StartUpload(object? sender, PacketEventArgs eventArgs)
+    /// <summary>
+    /// Starts the upload sequence of a given SFile, which is a result of FileSyncInitResponse
+    /// </summary>
+    /// <param name="sender">eventparam</param>
+    /// <param name="packetEventArgs">Wrapped packet</param>
+    public void StartUpload(object? sender, PacketEventArgs packetEventArgs)
     {
         Console.WriteLine("INITIATING UPLOAD");
-        MemoryStream memoryStream = new MemoryStream(eventArgs.Packet.Payload, 0, eventArgs.Packet.MessageLength);
+        MemoryStream memoryStream = new MemoryStream(packetEventArgs.Packet.Payload, 0, packetEventArgs.Packet.MessageLength);
         FSInitResponse fsInitResponse = Serializer.Deserialize<FSInitResponse>(memoryStream);
         if (!fsInitResponse.IsAccepted)
         {
+            
             _syncedFilesLookup.Remove(fsInitResponse.FileId);
         }
         SFile? sFile;
@@ -127,71 +133,6 @@ public class FileSyncController
                 Thread.Sleep(500);
             }
         })).Start();
-    }
-
-    public void HashUpdate(DirectoryInfo directoryInfo)
-    {
-        //DirectoryChangeInfo directoryChangeInfo = new DirectoryChangeInfo();
-        if (directoryInfo.GetDirectories().Length > 0)
-        {
-            try
-            {
-                foreach (var dict in directoryInfo.GetDirectories())
-                {
-                    HashUpdate(dict);
-                }
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-            }
-        }
-        if (directoryInfo.GetFiles().Length > 0)
-        {
-            foreach (var fileInfo in directoryInfo.GetFiles())
-            {
-                try
-                {
-                    //Console.WriteLine(fileInfo.FullName);
-                    if(_rocksDb.HasKey(Encoding.UTF8.GetBytes(fileInfo.FullName)))// Checks if there is a filepath like this in DB
-                    { //Only looks up FUUID and updates the respective HASH
-                        Console.WriteLine("EXISTED");
-                        var fuuid = _rocksDb.Get(Encoding.UTF8.GetBytes(fileInfo.FullName));
-                        
-                        //Generate HASH
-                        ulong hash64;
-                        using var memoryStream = new MemoryStream();
-                        {
-                            hash64 = XXHash3.Hash64(fileInfo.OpenRead());
-                            Console.WriteLine(hash64);
-                        }
-                        _rocksDb.Put(fuuid,BitConverter.GetBytes(hash64));
-                    }
-                    else
-                    { //Adds new FP->FUUID and FUUID->HASH
-                        var fuuid = Guid.NewGuid().ToByteArray();
-                        Console.WriteLine($"CREATING NEW {fuuid.Length}");
-                        Console.WriteLine(BitConverter.ToString(fuuid));
-
-                        _rocksDb.Put(Encoding.UTF8.GetBytes(fileInfo.FullName),fuuid);
-                        ulong hash64;
-                        using var memoryStream = new MemoryStream();
-                        {
-                            hash64 = XXHash3.Hash64(fileInfo.OpenRead());
-                            Console.WriteLine(hash64);
-                        }
-                        _rocksDb.Put(fuuid,BitConverter.GetBytes(hash64));
-                    }
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e);
-                }
-            }
-        }
-        //Console.WriteLine($"returning: {fileChangeInfosRoot.Count}");
-        return;
-
     }
     public void Sync()
     {

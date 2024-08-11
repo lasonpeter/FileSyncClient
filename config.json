@@ -1,0 +1,12 @@
+{
+  "port": 11000,
+  "host_name": "localhost",
+  "synchronization_paths": [
+    {
+      "path": "/home/xenu/.config/unity3d/",
+      "recursive": true,
+      "synchronized": true
+    }
+  ],
+  "working_directory": ""
+}

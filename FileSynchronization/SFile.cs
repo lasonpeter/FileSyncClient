@@ -21,6 +21,10 @@ public class SFile
     private byte _fileId;
     private object _socketLock;
 
+    /// <summary>
+    /// Starts the synchronization procedure for this file object
+    /// </summary>
+    /// <returns></returns>
     public bool SyncFile()
     {
         Console.WriteLine("SYNCING FILE, ONCEEEEEEEEE ?");
@@ -50,6 +54,10 @@ public class SFile
         return true;
     }
     
+    
+    /// <summary>
+    /// Starts the upload of current file object
+    /// </summary>
     public void StartFileUpload()
     {
 
@@ -116,7 +124,5 @@ public class SFile
             }
         });
         upload.Start();
-        
-        
     }
 }

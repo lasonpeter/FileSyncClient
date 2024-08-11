@@ -1,5 +1,8 @@
+using System.Text;
 using FileSyncClient.Config;
 using FSWatcher;
+using RocksDbSharp;
+using XXHash3NET;
 
 namespace FileSyncClient;
 
@@ -7,16 +10,19 @@ public class FileWatcher
 {
     private Dictionary<string, FileSystemWatcher> _watchers = new();
     private FileSyncController _fileSyncController;
-
-    public FileWatcher(FileSyncController fileSyncController)
+    private RocksDb _rocksDb;
+    private List<SynchronizedObject> _synchronizedPaths;
+    public FileWatcher(FileSyncController fileSyncController, RocksDb rocksDb)
     {
         _fileSyncController = fileSyncController;
+        _rocksDb = rocksDb;
         _fileSyncController.Watch();
     }
 
 
-    public void LoadObjects(List<SynchronizedObject> synchronizedPaths)
+    public void LoadSynchronizedObjects(List<SynchronizedObject> synchronizedPaths)
     {
+        _synchronizedPaths = synchronizedPaths;
         Console.WriteLine($"COUNT: {synchronizedPaths.Count}");
         foreach (var synchronizedPath in synchronizedPaths)
         {
@@ -91,6 +97,85 @@ public class FileWatcher
         watcher.IncludeSubdirectories = true;
         watcher.EnableRaisingEvents = true;
         _watchers.Add(path,watcher);
+    }
+
+    public void UpdateSyncedFilesHashes()
+    {
+        Parallel.ForEach(_synchronizedPaths, o =>
+        {
+            HashUpdate(new DirectoryInfo(o.SynchronizedObjectPath));
+        });
+    }
+    /// <summary>
+    /// Updates hashes in rocksdb for all synced files in a given directory 
+    /// </summary>
+    /// <param name="directoryInfo">Directory which one's file's hashes to update </param>
+    /// TODO: Change it from using recursion to iteration to avoid StackOverflow exception
+    private void HashUpdate(DirectoryInfo directoryInfo)
+    {
+        if (directoryInfo.GetDirectories().Length > 0)
+        {
+            try
+            {
+                foreach (var dict in directoryInfo.GetDirectories())
+                {
+                    HashUpdate(dict);
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+        }
+        if (directoryInfo.GetFiles().Length > 0)
+        {
+            foreach (var fileInfo in directoryInfo.GetFiles())
+            {
+                try
+                {
+                    Console.WriteLine(fileInfo.FullName);
+                    if(_rocksDb.HasKey(Encoding.UTF8.GetBytes(fileInfo.FullName)))// Checks if there is a filepath like this in DB
+                    { //Only looks up FUUID and updates the respective HASH
+                        Console.WriteLine("EXISTED");
+                        var fuuid = _rocksDb.Get(Encoding.UTF8.GetBytes(fileInfo.FullName));
+
+                        var resp =_rocksDb.Get(fuuid);
+                        //Generate HASH
+                        ulong hash64;
+                        using var memoryStream = new MemoryStream();
+                        {
+                            hash64 = XXHash3.Hash64(fileInfo.OpenRead());
+                            Console.WriteLine(hash64);
+                        }
+                        if (BitConverter.ToUInt64(resp) != hash64)
+                        {
+                            Console.WriteLine("UPDATED");
+                        }
+                        _rocksDb.Put(fuuid,BitConverter.GetBytes(hash64));
+                    }
+                    else
+                    { //Adds new FP->FUUID and FUUID->HASH
+                        var fuuid = Guid.NewGuid().ToByteArray();
+                        Console.WriteLine($"CREATING NEW {fuuid.Length}");
+                        Console.WriteLine(BitConverter.ToString(fuuid));
+
+                        _rocksDb.Put(Encoding.UTF8.GetBytes(fileInfo.FullName),fuuid);
+                        ulong hash64;
+                        using var memoryStream = new MemoryStream();
+                        {
+                            hash64 = XXHash3.Hash64(fileInfo.OpenRead());
+                            Console.WriteLine(hash64);
+                        }
+                        _rocksDb.Put(fuuid,BitConverter.GetBytes(hash64));
+                    }
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                }
+            }
+        }
+        return;
     }
 }
 

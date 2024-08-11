@@ -23,7 +23,6 @@ class PacketDistributor
 
     public void AwaitPacket()
     {
-        
         var buffer = new byte[4_099];
         Packet packet = new Packet();
         while (true)
