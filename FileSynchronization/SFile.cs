@@ -73,13 +73,13 @@ public class SFile
             LastAccessTime = fileInfo.LastAccessTime,
             LastWriteTime = fileInfo.LastWriteTime,
             CreationTime = fileInfo.CreationTime,
-            FuuId = fuuid
+            FuuId = fuuid.ToList()
         };
-        Console.WriteLine($"THIS:{fsInit.FuuId.Length}");
+        Console.WriteLine($"THIS:{fsInit.FuuId.Count}");
         var memoryStream2 = new MemoryStream(stream.ToArray(), 0, (int)stream.Length);
         var fsInit2 = Serializer.Deserialize<FsInit>(memoryStream2);
-        Console.WriteLine($"THIS2:{fsInit2.FuuId.Length}");
-        Console.WriteLine($"CHEEEEEEEEEEEKIN: {new Guid(fsInit.FuuId).ToString()}");
+        Console.WriteLine($"THIS2:{fsInit2.FuuId.Count}");
+        Console.WriteLine($"CHEEEEEEEEEEEKIN: {new Guid(fsInit.FuuId.ToArray()).ToString()}");
         Serializer.Serialize(stream,fsInit);
         Packet packet = new Packet(stream.ToArray(),PacketType.FileSyncInit);
         
