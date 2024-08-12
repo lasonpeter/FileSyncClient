@@ -133,7 +133,7 @@ class Program
                 FileWatcher fileWatcher = new FileWatcher(fileSyncController,rocksDb);
                 fileWatcher.LoadSynchronizedObjects(settings.SynchronizedObjects);
                 fileWatcher.AddScanner();
-                fileWatcher.UpdateSyncedFilesHashes();
+                //fileWatcher.UpdateSyncedFilesHashes();
                 packetDistributor.AwaitPacket();
                 Console.WriteLine("DISCONNECTED");
             }

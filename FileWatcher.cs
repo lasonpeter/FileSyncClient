@@ -145,7 +145,7 @@ public class FileWatcher
                         using var memoryStream = new MemoryStream();
                         {
                             hash64 = XXHash3.Hash64(fileInfo.OpenRead());
-                            Console.WriteLine(hash64);
+                            Console.WriteLine($"Hash: {hash64} fuuid: {new Guid(fuuid).ToString()}");
                         }
                         if (BitConverter.ToUInt64(resp) != hash64)
                         {

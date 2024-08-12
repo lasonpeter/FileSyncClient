@@ -124,7 +124,7 @@ public class FileSyncController
                             _syncedFilesLookup.Add(x, new SFile(_socket, fileChange.Value.FilePath, x,_socketLock));
                             SFile? sFile;
                             if (_syncedFilesLookup.TryGetValue(x, out sFile))
-                                sFile.SyncFile();
+                                sFile.SyncFile(ref _rocksDb);
                             x++;
                         }
                     }
@@ -156,7 +156,7 @@ public class FileSyncController
                             break;
                         }
                         SFile sFile = new SFile(_socket, fileChange.Value.FilePath, x,_socketLock);
-                        if (sFile.SyncFile())
+                        if (sFile.SyncFile(ref _rocksDb))
                         {
                             _syncedFilesLookup.Add(x,sFile );
                             toRemove.Add(fileChange.Key);

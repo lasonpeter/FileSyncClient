@@ -1,5 +1,7 @@
 using System.Net.Sockets;
+using System.Text;
 using ProtoBuf;
+using RocksDbSharp;
 using Serilog;
 using TransferLib;
 using XXHash3NET;
@@ -25,18 +27,44 @@ public class SFile
     /// Starts the synchronization procedure for this file object
     /// </summary>
     /// <returns></returns>
-    public bool SyncFile()
+    public bool SyncFile(ref RocksDb rocksDb)
     {
-        Console.WriteLine("SYNCING FILE, ONCEEEEEEEEE ?");
-        if (!File.Exists(_filePath))
+        byte[] fuuid;
+        Console.WriteLine($"SYNCING FILE, ONCEEEEEEEEE {_filePath}");
+        if (!File.Exists(_filePath))//Checks if file exists
         {
-            Log.Warning("}File doesn't exist {file}, aborting",_filePath);
+            Log.Warning("File doesn't exist {file}, aborting",_filePath);
             return false;
+        }
+        try
+        {
+            fuuid = rocksDb.Get(Encoding.UTF8.GetBytes(_filePath)); //Checks if there is a record with specified filepath
+            if (fuuid is null)
+            {//Creates a new hash for the file as well as fuuid
+                Console.WriteLine("Creating new FUUID & hash");
+                ulong hash64;
+                using var memoryStream = new MemoryStream();
+                {
+                    hash64 = XXHash3.Hash64(File.OpenRead(_filePath));
+                    Console.WriteLine(hash64);
+                }
+                fuuid = Guid.NewGuid().ToByteArray();
+                rocksDb.Put(fuuid,BitConverter.GetBytes(hash64)); //ALWAYS USE Guid.NewGuid().ToByteArray() to get fuuid
+                rocksDb.Put(Encoding.UTF8.GetBytes(_filePath),fuuid);
+                Console.WriteLine($"Created new FUUID: {new Guid(fuuid).ToString()}");
+            }
+            byte[] hash = rocksDb.Get(fuuid);
+            Console.WriteLine($"File with FUUID: {new Guid(fuuid).ToString()} HASH: {BitConverter.ToUInt64(hash)}");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
         }
         using Stream file = File.OpenRead(_filePath);
         using MemoryStream stream = new MemoryStream();
         FileInfo fileInfo = new FileInfo(_filePath);
-        Serializer.Serialize(stream,new FSInit
+        FsInit fsInit = new FsInit()
         {
             FileId = _fileId,
             FilePath = fileInfo.DirectoryName!,
@@ -45,8 +73,14 @@ public class SFile
             LastAccessTime = fileInfo.LastAccessTime,
             LastWriteTime = fileInfo.LastWriteTime,
             CreationTime = fileInfo.CreationTime,
-            FuuId = Guid.NewGuid().ToByteArray()
-        });
+            FuuId = fuuid
+        };
+        Console.WriteLine($"THIS:{fsInit.FuuId.Length}");
+        var memoryStream2 = new MemoryStream(stream.ToArray(), 0, (int)stream.Length);
+        var fsInit2 = Serializer.Deserialize<FsInit>(memoryStream2);
+        Console.WriteLine($"THIS2:{fsInit2.FuuId.Length}");
+        Console.WriteLine($"CHEEEEEEEEEEEKIN: {new Guid(fsInit.FuuId).ToString()}");
+        Serializer.Serialize(stream,fsInit);
         Packet packet = new Packet(stream.ToArray(),PacketType.FileSyncInit);
         
             _socket.SendAsync(packet.ToBytes());
