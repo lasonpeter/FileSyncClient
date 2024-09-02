@@ -56,7 +56,7 @@ class PacketDistributor
                 case PacketType.FileSyncInitResponse: 
                     OnFileSyncInitResponsePacket(new PacketEventArgs(packet));
                     break;
-                case PacketType.FileSyncCheckHashResponse:
+                case PacketType.FileSyncUploadCheckHashResponse:
                     OnFileSyncCheckHashResponsePacket(new PacketEventArgs(packet));
                     break;
                 /*default:

@@ -88,7 +88,7 @@ public class FileSyncController
     public void FileHashCheckResponse(object? sender, PacketEventArgs eventArgs)
     {
         MemoryStream memoryStream = new MemoryStream(eventArgs.Packet.Payload, 0, eventArgs.Packet.MessageLength);
-        FSCheckHashResponse fsCheckHashResponse = Serializer.Deserialize<FSCheckHashResponse>(memoryStream);
+        FSUploadCheckHashResponse fsCheckHashResponse = Serializer.Deserialize<FSUploadCheckHashResponse>(memoryStream);
         if (fsCheckHashResponse.IsCorrect)
         {
             _syncedFilesLookup.Remove(fsCheckHashResponse.FileId);
@@ -136,7 +136,6 @@ public class FileSyncController
     }
     public void Sync()
     {
-        
         while (true)
         {
             //Console.WriteLine("TRY START>");
@@ -166,9 +165,7 @@ public class FileSyncController
                             toRemove.Add(fileChange.Key);
                         }
                         x++; 
-
                     }
-
                     foreach (var removed in toRemove)
                     {
                         if (Queue.Remove(removed))
@@ -178,7 +175,6 @@ public class FileSyncController
                         else
                         {
                             Console.WriteLine($"FAILED from queue:{removed}");
-
                         }
                     }
                 }

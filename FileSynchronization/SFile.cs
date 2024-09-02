@@ -29,7 +29,7 @@ public class SFile
     /// <returns></returns>
     public bool SyncFile(ref RocksDb rocksDb)
     {
-        byte[] fuuid;
+        Guid fuuid;
         Console.WriteLine($"SYNCING FILE, ONCEEEEEEEEE {_filePath}");
         if (!File.Exists(_filePath))//Checks if file exists
         {
@@ -38,8 +38,8 @@ public class SFile
         }
         try
         {
-            fuuid = rocksDb.Get(Encoding.UTF8.GetBytes(_filePath)); //Checks if there is a record with specified filepath
-            if (fuuid is null)
+            var fuuidBytes = rocksDb.Get(Encoding.UTF8.GetBytes(_filePath)); 
+            if(fuuidBytes is null)//Checks if there is a record with specified filepath
             {//Creates a new hash for the file as well as fuuid
                 Console.WriteLine("Creating new FUUID & hash");
                 ulong hash64;
@@ -48,13 +48,17 @@ public class SFile
                     hash64 = XXHash3.Hash64(File.OpenRead(_filePath));
                     Console.WriteLine(hash64);
                 }
-                fuuid = Guid.NewGuid().ToByteArray();
-                rocksDb.Put(fuuid,BitConverter.GetBytes(hash64)); //ALWAYS USE Guid.NewGuid().ToByteArray() to get fuuid
-                rocksDb.Put(Encoding.UTF8.GetBytes(_filePath),fuuid);
-                Console.WriteLine($"Created new FUUID: {new Guid(fuuid).ToString()}");
+                fuuid = Guid.NewGuid();
+                rocksDb.Put(fuuid.ToByteArray(),BitConverter.GetBytes(hash64)); //ALWAYS USE Guid.NewGuid().ToByteArray() to get fuuid
+                rocksDb.Put(Encoding.UTF8.GetBytes(_filePath),fuuid.ToByteArray());
+                Console.WriteLine($"Created new FUUID: {fuuid.ToString()}");
             }
-            byte[] hash = rocksDb.Get(fuuid);
-            Console.WriteLine($"File with FUUID: {new Guid(fuuid).ToString()} HASH: {BitConverter.ToUInt64(hash)}");
+            else
+            {
+                fuuid = new Guid(fuuidBytes);
+            }
+            byte[] hash = rocksDb.Get(fuuid.ToByteArray());
+            Console.WriteLine($"File with FUUID: {fuuid.ToString()} HASH: {BitConverter.ToUInt64(hash)}");
         }
         catch (Exception e)
         {
@@ -73,13 +77,13 @@ public class SFile
             LastAccessTime = fileInfo.LastAccessTime,
             LastWriteTime = fileInfo.LastWriteTime,
             CreationTime = fileInfo.CreationTime,
-            FuuId = fuuid.ToList()
+            FuuId = fuuid
         };
-        Console.WriteLine($"THIS:{fsInit.FuuId.Count}");
+        Console.WriteLine($"THIS:{fsInit.FuuId}");
         var memoryStream2 = new MemoryStream(stream.ToArray(), 0, (int)stream.Length);
         var fsInit2 = Serializer.Deserialize<FsInit>(memoryStream2);
-        Console.WriteLine($"THIS2:{fsInit2.FuuId.Count}");
-        Console.WriteLine($"CHEEEEEEEEEEEKIN: {new Guid(fsInit.FuuId.ToArray()).ToString()}");
+        Console.WriteLine($"THIS2:{fsInit2.FuuId}");
+        Console.WriteLine($"CHEEEEEEEEEEEKIN: {fsInit.FuuId.ToString()}");
         Serializer.Serialize(stream,fsInit);
         Packet packet = new Packet(stream.ToArray(),PacketType.FileSyncInit);
         
@@ -148,13 +152,13 @@ public class SFile
             }
 
             using MemoryStream memoryStream = new MemoryStream();
-            Serializer.Serialize(memoryStream, new FSCheckHash()
+            Serializer.Serialize(memoryStream, new FSUploadCheckHash()
             {
                 FileId = _fileId,
                 Hash = hash64
             });
             {
-                _socket.Send(new Packet(memoryStream.ToArray(), PacketType.FileSyncCheckHash).ToBytes());
+                _socket.Send(new Packet(memoryStream.ToArray(), PacketType.FileSyncUploadCheckHash).ToBytes());
             }
         });
         upload.Start();

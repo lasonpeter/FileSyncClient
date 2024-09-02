@@ -91,37 +91,6 @@ class Program
                 tcpClient.Connect(ipAddress, settings.Port);
                 Socket socket = tcpClient.Client;
                 FileSyncController fileSyncController = new FileSyncController(socket,socketLock,rocksDb);
-                /*Console.WriteLine("TRYING OUT");
-                fileSyncController.HashUpdate(new DirectoryInfo(settings.SynchronizedObjects[0].SynchronizedObjectPath));*/
-                /*rocksDb.Flush(new FlushOptions());
-                var iter = rocksDb.NewIterator();
-                int i = 0;
-                iter.SeekToFirst();
-                while (true)
-                {
-                    try
-                    {
-                        Console.WriteLine(iter.Value().Length);
-                        Guid guid = new Guid(iter.Value());
-                        Console.WriteLine($"{iter.StringKey()}  |  {guid.ToString()}");
-                        iter.Next();
-                    }
-                    catch (Exception e)
-                    {
-                        try
-                        {
-                            Console.WriteLine(iter.Key().Length);
-                            Guid guid = new Guid(iter.Key());
-                            Console.WriteLine($"{guid}  |  {BitConverter.ToUInt64(iter.Value())}");
-                            iter.Next();
-                        }
-                        catch (Exception exception)
-                        {
-                            iter.Next();
-                            Console.WriteLine(exception);
-                        }
-                    }
-                }*/
                 PacketDistributor packetDistributor = new PacketDistributor(socket);
                 //TODO add a version handshake
                 packetDistributor.OnPing += Ping;
@@ -142,7 +111,7 @@ class Program
                 /*ads*/
                 //Console.WriteLine(e);
                 Thread.Sleep(1000);
-                Console.WriteLine("Failed to connect");
+                Console.WriteLine("Failed to connect:"+e);
             }
 
             x++;
