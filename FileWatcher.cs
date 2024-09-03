@@ -2,6 +2,7 @@ using System.Text;
 using FileSyncClient.Config;
 using FSWatcher;
 using RocksDbSharp;
+using TransferLib;
 using XXHash3NET;
 
 namespace FileSyncClient;
@@ -51,19 +52,19 @@ public class FileWatcher
     {
         throw new Exception("yoikes");
     }
-    
+
 
     private void AddWatcher(string path)
     {
         var watcher = new FileSystemWatcher(path);
-        watcher.NotifyFilter =  NotifyFilters.CreationTime
-                                | NotifyFilters.DirectoryName
-                                | NotifyFilters.FileName
-                                | NotifyFilters.LastWrite
-                                | NotifyFilters.Security 
-                                | NotifyFilters.Size;
+        watcher.NotifyFilter = NotifyFilters.CreationTime
+                               | NotifyFilters.DirectoryName
+                               | NotifyFilters.FileName
+                               | NotifyFilters.LastWrite
+                               | NotifyFilters.Security
+                               | NotifyFilters.Size;
         watcher.InternalBufferSize = 655360;
-        Console.WriteLine("BUFFER SIZE"+watcher.InternalBufferSize);
+        Console.WriteLine("BUFFER SIZE" + watcher.InternalBufferSize);
         watcher.Error += (sender, args) =>
         {
             {
@@ -75,8 +76,8 @@ public class FileWatcher
         watcher.Created += ((sender, args) =>
         {
             Console.WriteLine("Directory/File created " + args.Name);
-            _fileSyncController.AddNewChange(new FileChange(args.FullPath,FileOperation.FileCreated));
-        } );
+            _fileSyncController.AddNewChange(new FileChange(args.FullPath, FileOperation.FileCreated));
+        });
         watcher.Deleted += ((sender, args) =>
         {
             Console.WriteLine("Directory/File deleted " + args.Name);
@@ -85,18 +86,94 @@ public class FileWatcher
         watcher.Changed += (sender, args) =>
         {
             Console.WriteLine("Directory/File changed " + args.Name);
-            _fileSyncController.AddNewChange(new FileChange(args.FullPath,FileOperation.FileCreated));
+            _fileSyncController.AddNewChange(new FileChange(args.FullPath, FileOperation.FileCreated));
         };
         watcher.Renamed += (sender, args) =>
         {
             Console.WriteLine("Directory/File renamed ");
             Console.WriteLine($"    From:{args.OldName} to {args.Name}");
             _fileSyncController.AddNewChange(new FileChange(args.FullPath, FileOperation.FileCreated));
-        }; 
+        };
         //watcher.Filter = "*.txt";
         watcher.IncludeSubdirectories = true;
         watcher.EnableRaisingEvents = true;
-        _watchers.Add(path,watcher);
+        _watchers.Add(path, watcher);
+    }
+
+    public void CheckHashesWithServer(DirectoryInfo directoryInfo, List<HashCheckPair> hashCheckPairs)
+    {
+        Console.WriteLine("WE");
+        if (directoryInfo.GetDirectories().Length > 0)
+        {
+            try
+            {
+                foreach (var dict in directoryInfo.GetDirectories())
+                {
+                    CheckHashesWithServer(dict,hashCheckPairs);
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+        }
+        if (directoryInfo.GetFiles().Length > 0)
+        {
+            foreach (var fileInfo in directoryInfo.GetFiles())
+            {
+                try
+                {
+                    Console.WriteLine(fileInfo.FullName);
+                    if(_rocksDb.HasKey(Encoding.UTF8.GetBytes(fileInfo.FullName)))// Checks if there is a filepath like this in DB
+                    { //Only looks up FUUID and updates the respective HASH
+                        Console.WriteLine("EXISTED");
+                        Guid fuuid = new Guid(_rocksDb.Get(Encoding.UTF8.GetBytes(fileInfo.FullName)));
+
+                        var resp =BitConverter.ToUInt64(_rocksDb.Get(fuuid.ToByteArray()));
+                        //Generate HASH
+                        ulong hash64;
+                        using var memoryStream = new MemoryStream();
+                        {
+                            hash64 = XXHash3.Hash64(fileInfo.OpenRead());
+                            Console.WriteLine($"Hash: {hash64} fuuid: {fuuid.ToString()}");
+                        }
+                        if (resp != hash64)
+                        {
+                            Console.WriteLine("UPDATED");
+                            _rocksDb.Put(fuuid.ToByteArray(),BitConverter.GetBytes(hash64));
+                        }
+                        hashCheckPairs.Add(new HashCheckPair(){FuuId = fuuid,Hash = resp});
+                    }
+                    else
+                    { 
+                        //Adds new FP->FUUID and FUUID->HASH
+                        var fuuid = Guid.NewGuid();
+                        Console.WriteLine($"CREATING NEW {fuuid.ToByteArray().Length}");
+                        //Console.WriteLine(BitConverter.ToString(fuuid));
+
+                        _rocksDb.Put(Encoding.UTF8.GetBytes(fileInfo.FullName),fuuid.ToByteArray());
+                        ulong hash64;
+                        using var memoryStream = new MemoryStream();
+                        {
+                            hash64 = XXHash3.Hash64(fileInfo.OpenRead());
+                            Console.WriteLine(hash64);
+                        }
+                        _rocksDb.Put(fuuid.ToByteArray(),BitConverter.GetBytes(hash64));
+                        hashCheckPairs.Add(new HashCheckPair(){FuuId = fuuid,Hash = hash64});
+
+                    }
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                }
+            }
+
+            if (hashCheckPairs.Count > 5)
+            {
+                //Don't know what to do
+            }
+        }
     }
 
     public void UpdateSyncedFilesHashes()
@@ -109,7 +186,7 @@ public class FileWatcher
     /// <summary>
     /// Updates hashes in rocksdb for all synced files in a given directory 
     /// </summary>
-    /// <param name="directoryInfo">Directory which one's file's hashes to update </param>
+    /// <param name="directoryInfo">Directory which one's file's hashes to update</param>
     /// TODO: Change it from using recursion to iteration to avoid StackOverflow exception
     private void HashUpdate(DirectoryInfo directoryInfo)
     {
@@ -196,6 +273,6 @@ public enum FileOperation
     DirectoryCreated,
     DirectoryDeleted,
     FileCreated,
-    FIleChanged,
+    FileChanged,
     FileDeleted
 }

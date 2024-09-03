@@ -19,7 +19,9 @@ class PacketDistributor
     public event EventHandler<PacketEventArgs>? OnPing;
     public event EventHandler<PacketEventArgs>? OnData;
     public event EventHandler<PacketEventArgs>? OnFileSyncInitResponse;
+    public event EventHandler<PacketEventArgs>? OnFileSyncUploadCheckHashResponse;
     public event EventHandler<PacketEventArgs>? OnFileSyncCheckHashResponse;
+
 
     public void AwaitPacket()
     {
@@ -57,7 +59,7 @@ class PacketDistributor
                     OnFileSyncInitResponsePacket(new PacketEventArgs(packet));
                     break;
                 case PacketType.FileSyncUploadCheckHashResponse:
-                    OnFileSyncCheckHashResponsePacket(new PacketEventArgs(packet));
+                    OnFileSyncUploadCheckHashResponsePacket(new PacketEventArgs(packet));
                     break;
                 /*default:
                     throw new Exception("FATAL SOCKET ERROR");*/
@@ -194,6 +196,15 @@ class PacketDistributor
     protected virtual void OnFileSyncInitResponsePacket(PacketEventArgs e)
     {
         EventHandler<PacketEventArgs>? raiseEvent = OnFileSyncInitResponse;
+        
+        if (raiseEvent != null)
+        {
+            raiseEvent.Invoke(this, e);
+        }
+    }
+    protected virtual void  OnFileSyncUploadCheckHashResponsePacket(PacketEventArgs e)
+    {
+        EventHandler<PacketEventArgs>? raiseEvent = OnFileSyncUploadCheckHashResponse;
         
         if (raiseEvent != null)
         {

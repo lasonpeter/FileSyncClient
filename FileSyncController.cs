@@ -85,7 +85,12 @@ public class FileSyncController
         }
     }
 
-    public void FileHashCheckResponse(object? sender, PacketEventArgs eventArgs)
+    /// <summary>
+    /// Called upon receiving response regarding checking if the uploaded file hash is the same on both client and server
+    /// </summary>
+    /// <param name="sender"></param>
+    /// <param name="eventArgs"></param>
+    public void FileSyncUploadHashCheckResponse(object? sender, PacketEventArgs eventArgs)
     {
         MemoryStream memoryStream = new MemoryStream(eventArgs.Packet.Payload, 0, eventArgs.Packet.MessageLength);
         FSUploadCheckHashResponse fsCheckHashResponse = Serializer.Deserialize<FSUploadCheckHashResponse>(memoryStream);
@@ -100,11 +105,35 @@ public class FileSyncController
 
         MemoryStream ms = new MemoryStream();
         Serializer.Serialize(ms,new FSFinish(){FileId = fsCheckHashResponse.FileId});
-        
             _socket.SendAsync(new Packet(ms.ToArray(), PacketType.FileSyncFinish, (int)ms.Length).ToBytes());
         
         Console.WriteLine("FINISH");
     }
+
+    /// <summary>
+    /// Called upon receiving response regarding checking hash validity of files during "Folder Scan"
+    /// </summary>
+    /// <param name="sender"></param>
+    /// <param name="eventArgs"></param>
+    public void FileSyncHashCheckResponse(object? sender, PacketEventArgs eventArgs)
+    {
+        MemoryStream memoryStream = new MemoryStream(eventArgs.Packet.Payload, 0, eventArgs.Packet.MessageLength);
+        FSHashCheckResponse fsCheckHashResponse = Serializer.Deserialize<FSHashCheckResponse>(memoryStream);
+        foreach (var fuuid in fsCheckHashResponse.Changed)
+        {
+            byte[] bytes = new byte[fuuid.ToByteArray().Length + 1];
+            bytes[0] = 0;
+            fuuid.ToByteArray().CopyTo(bytes,1);
+            string filepath =Encoding.UTF8.GetString(_rocksDb.Get(bytes));
+            Queue.Add(filepath, new FileChange(filepath,FileOperation.FileChanged));
+        }
+    }
+
+    public void ScanSyncedFolders()
+    {
+        
+    }
+    
 //TODO
     public void ContinuousSync()
     {

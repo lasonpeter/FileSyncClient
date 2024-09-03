@@ -95,13 +95,17 @@ class Program
                 //TODO add a version handshake
                 packetDistributor.OnPing += Ping;
                 packetDistributor.OnFileSyncInitResponse += fileSyncController.StartUpload;
-                packetDistributor.OnFileSyncCheckHashResponse += fileSyncController.FileHashCheckResponse;
+                packetDistributor.OnFileSyncUploadCheckHashResponse += fileSyncController.FileSyncUploadHashCheckResponse;
+                packetDistributor.OnFileSyncCheckHashResponse += fileSyncController.FileSyncHashCheckResponse;
                 packetDistributor.VersionHandshake();
                 packetDistributor.Ping();
                 //Start up file watcher
                 FileWatcher fileWatcher = new FileWatcher(fileSyncController,rocksDb);
                 fileWatcher.LoadSynchronizedObjects(settings.SynchronizedObjects);
                 fileWatcher.AddScanner();
+                fileWatcher.CheckHashesWithServer(
+                    new DirectoryInfo(settings.SynchronizedObjects[0].SynchronizedObjectPath),
+                    new List<HashCheckPair>());
                 //fileWatcher.UpdateSyncedFilesHashes();
                 packetDistributor.AwaitPacket();
                 Console.WriteLine("DISCONNECTED");
