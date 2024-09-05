@@ -19,8 +19,7 @@ public class FileWatcher
         _rocksDb = rocksDb;
         _fileSyncController.Watch();
     }
-
-
+    
     public void LoadSynchronizedObjects(List<SynchronizedObject> synchronizedPaths)
     {
         _synchronizedPaths = synchronizedPaths;
@@ -32,7 +31,7 @@ public class FileWatcher
                 AddWatcher(synchronizedPath.SynchronizedObjectPath);
         }
     }
-
+    
     public void AddScanner()
     {
         new Thread(o =>
@@ -100,6 +99,11 @@ public class FileWatcher
         _watchers.Add(path, watcher);
     }
 
+    /// <summary>
+    /// Used for scanning the directory and checking the hashes of files with the server saved hashes
+    /// </summary>
+    /// <param name="directoryInfo">Directory to scan</param>
+    /// <param name="hashCheckPairs"></param>
     public void CheckHashesWithServer(DirectoryInfo directoryInfo, List<HashCheckPair> hashCheckPairs)
     {
         Console.WriteLine("WE");
