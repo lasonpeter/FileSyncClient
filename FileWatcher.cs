@@ -103,7 +103,7 @@ public class FileWatcher
     /// Used for scanning the directory and checking the hashes of files with the server saved hashes
     /// </summary>
     /// <param name="directoryInfo">Directory to scan</param>
-    /// <param name="hashCheckPairs"></param>
+    /// <param name="hashCheckPairs">Hash and FuuId pairs for checking with the server if everything is up-to-date and such</param>
     public void CheckHashesWithServer(DirectoryInfo directoryInfo, List<HashCheckPair> hashCheckPairs)
     {
         Console.WriteLine("WE");
@@ -141,15 +141,16 @@ public class FileWatcher
                             hash64 = XXHash3.Hash64(fileInfo.OpenRead());
                             Console.WriteLine($"Hash: {hash64} fuuid: {fuuid.ToString()}");
                         }
-                        if (resp != hash64)
+                        if (resp != hash64) //Means that the file changed while the file sync software was inactive or
+                                            //unable to upload it to the server, doesn't update the db as not to flag the file as synced per se
                         {
                             Console.WriteLine("UPDATED");
-                            _rocksDb.Put(fuuid.ToByteArray(),BitConverter.GetBytes(hash64));
+                            //_rocksDb.Put(fuuid.ToByteArray(),BitConverter.GetBytes(hash64));
                         }
                         hashCheckPairs.Add(new HashCheckPair(){FuuId = fuuid,Hash = resp});
                     }
                     else
-                    { 
+                    {   
                         //Adds new FP->FUUID and FUUID->HASH
                         var fuuid = Guid.NewGuid();
                         Console.WriteLine($"CREATING NEW {fuuid.ToByteArray().Length}");
