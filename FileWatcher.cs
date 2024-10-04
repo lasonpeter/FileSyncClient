@@ -11,12 +11,10 @@ public class FileWatcher
 {
     private Dictionary<string, FileSystemWatcher> _watchers = new();
     private FileSyncController _fileSyncController;
-    private RocksDb _rocksDb;
     private List<SynchronizedObject> _synchronizedPaths;
-    public FileWatcher(FileSyncController fileSyncController, RocksDb rocksDb)
+    public FileWatcher(FileSyncController fileSyncController)
     {
         _fileSyncController = fileSyncController;
-        _rocksDb = rocksDb;
         _fileSyncController.Watch();
     }
     
@@ -128,12 +126,12 @@ public class FileWatcher
                 try
                 {
                     Console.WriteLine(fileInfo.FullName);
-                    if(_rocksDb.HasKey(Encoding.UTF8.GetBytes(fileInfo.FullName)))// Checks if there is a filepath like this in DB
+                    if(DbCache.Instance.HasFilePath(fileInfo.FullName))// Checks if there is a filepath like this in DB
                     { //Only looks up FUUID and updates the respective HASH
                         Console.WriteLine("EXISTED");
-                        Guid fuuid = new Guid(_rocksDb.Get(Encoding.UTF8.GetBytes(fileInfo.FullName)));
-
-                        var resp =BitConverter.ToUInt64(_rocksDb.Get(fuuid.ToByteArray()));
+                        //Guid fuuid = new Guid(_rocksDb.Get(Encoding.UTF8.GetBytes(fileInfo.FullName)));
+                        Guid fuuid = DbCache.Instance.GetFuuid(fileInfo.FullName);
+                        var resp =DbCache.Instance.GetHash(fuuid);
                         //Generate HASH
                         ulong hash64;
                         using var memoryStream = new MemoryStream();
@@ -156,14 +154,16 @@ public class FileWatcher
                         Console.WriteLine($"CREATING NEW {fuuid.ToByteArray().Length}");
                         //Console.WriteLine(BitConverter.ToString(fuuid));
 
-                        _rocksDb.Put(Encoding.UTF8.GetBytes(fileInfo.FullName),fuuid.ToByteArray());
+                        DbCache.Instance.SetFuuid(fileInfo.FullName,fuuid);
+                        //_rocksDb.Put(Encoding.UTF8.GetBytes(fileInfo.FullName),fuuid.ToByteArray());
                         ulong hash64;
                         using var memoryStream = new MemoryStream();
                         {
                             hash64 = XXHash3.Hash64(fileInfo.OpenRead());
                             Console.WriteLine(hash64);
                         }
-                        _rocksDb.Put(fuuid.ToByteArray(),BitConverter.GetBytes(hash64));
+                        //_rocksDb.Put(fuuid.ToByteArray(),BitConverter.GetBytes(hash64));
+                        DbCache.Instance.SetHash(fuuid,hash64);
                         hashCheckPairs.Add(new HashCheckPair(){FuuId = fuuid,Hash = hash64});
 
                     }
@@ -216,39 +216,41 @@ public class FileWatcher
                 try
                 {
                     Console.WriteLine(fileInfo.FullName);
-                    if(_rocksDb.HasKey(Encoding.UTF8.GetBytes(fileInfo.FullName)))// Checks if there is a filepath like this in DB
+                    if(DbCache.Instance.HasFilePath(fileInfo.FullName))// Checks if there is a filepath like this in DB
                     { //Only looks up FUUID and updates the respective HASH
                         Console.WriteLine("EXISTED");
-                        var fuuid = _rocksDb.Get(Encoding.UTF8.GetBytes(fileInfo.FullName));
+                        var fuuid = DbCache.Instance.GetFuuid(fileInfo.FullName);
+                        //var fuuid = _rocksDb.Get(Encoding.UTF8.GetBytes(fileInfo.FullName));
 
-                        var resp =_rocksDb.Get(fuuid);
+                        var resp = DbCache.Instance.GetHash(fuuid);
                         //Generate HASH
                         ulong hash64;
                         using var memoryStream = new MemoryStream();
                         {
                             hash64 = XXHash3.Hash64(fileInfo.OpenRead());
-                            Console.WriteLine($"Hash: {hash64} fuuid: {new Guid(fuuid).ToString()}");
+                            Console.WriteLine($"Hash: {hash64} fuuid: {fuuid.ToString()}");
                         }
-                        if (BitConverter.ToUInt64(resp) != hash64)
+                        if (resp != hash64)
                         {
                             Console.WriteLine("UPDATED");
                         }
-                        _rocksDb.Put(fuuid,BitConverter.GetBytes(hash64));
+                        DbCache.Instance.SetHash(fuuid,hash64);
+                        //_rocksDb.Put(fuuid,BitConverter.GetBytes(hash64));
                     }
                     else
                     { //Adds new FP->FUUID and FUUID->HASH
-                        var fuuid = Guid.NewGuid().ToByteArray();
-                        Console.WriteLine($"CREATING NEW {fuuid.Length}");
-                        Console.WriteLine(BitConverter.ToString(fuuid));
-
-                        _rocksDb.Put(Encoding.UTF8.GetBytes(fileInfo.FullName),fuuid);
+                        var fuuid = Guid.NewGuid();
+                        Console.WriteLine($"CREATING NEW {fuuid.ToByteArray().Length}");
+                        DbCache.Instance.SetFuuid(fileInfo.FullName,fuuid);
+                        //_rocksDb.Put(Encoding.UTF8.GetBytes(fileInfo.FullName),fuuid);
                         ulong hash64;
                         using var memoryStream = new MemoryStream();
                         {
                             hash64 = XXHash3.Hash64(fileInfo.OpenRead());
                             Console.WriteLine(hash64);
                         }
-                        _rocksDb.Put(fuuid,BitConverter.GetBytes(hash64));
+                        DbCache.Instance.SetHash(fuuid,hash64);
+                        //_rocksDb.Put(fuuid,BitConverter.GetBytes(hash64));
                     }
                 }
                 catch (Exception e)

@@ -19,11 +19,9 @@ public class FileSyncController
     private readonly bool[] _availableIds = new bool[256];
     private long _lastAccessTime=0; //For upload time counter
     private readonly object _socketLock;
-    private RocksDb _rocksDb;
 
-    public FileSyncController(Socket socket,object socketLock,RocksDb rocksDb)
+    public FileSyncController(Socket socket,object socketLock)
     {
-        _rocksDb = rocksDb;
         _socket = socket;
         _socketLock = socketLock;
     }
@@ -121,10 +119,7 @@ public class FileSyncController
         FSHashCheckResponse fsCheckHashResponse = Serializer.Deserialize<FSHashCheckResponse>(memoryStream);
         foreach (var fuuid in fsCheckHashResponse.Changed)
         {
-            byte[] bytes = new byte[fuuid.ToByteArray().Length + 1];
-            bytes[0] = 0;
-            fuuid.ToByteArray().CopyTo(bytes,1);
-            string filepath =Encoding.UTF8.GetString(_rocksDb.Get(bytes));
+            string filepath =DbCache.Instance.GetFilePath(fuuid);
             Queue.Add(filepath, new FileChange(filepath,FileOperation.FileChanged));
         }
     }
@@ -153,7 +148,7 @@ public class FileSyncController
                             _syncedFilesLookup.Add(x, new SFile(_socket, fileChange.Value.FilePath, x,_socketLock));
                             SFile? sFile;
                             if (_syncedFilesLookup.TryGetValue(x, out sFile))
-                                sFile.SyncFile(ref _rocksDb);
+                                sFile.SyncFile();
                             x++;
                         }
                     }
@@ -184,7 +179,7 @@ public class FileSyncController
                             break;
                         }
                         SFile sFile = new SFile(_socket, fileChange.Value.FilePath, x,_socketLock);
-                        if (sFile.SyncFile(ref _rocksDb))
+                        if (sFile.SyncFile())
                         {
                             _syncedFilesLookup.Add(x,sFile );
                             toRemove.Add(fileChange.Key);

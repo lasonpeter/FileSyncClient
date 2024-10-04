@@ -11,11 +11,24 @@ namespace FileSyncClient;
 /// </summary>
 public class DbCache
 {
- 
     private RocksDb _cache;
+    private static DbCache? _instance;
+
+    public static DbCache Instance
+    {
+        get
+        {
+            if (_instance is null)
+            {
+                throw new Exception("Data base cache not initiated");
+            }
+            return _instance;
+        }
+    }
 
     public DbCache(RocksDb cache)
     {
+        _instance = this;
         _cache = cache;
     }
     /// <summary>
@@ -128,5 +141,16 @@ public class DbCache
         {
             throw new SomethingIsWrongWithCacheException(message:e.Message,inner:e);
         }
+    }
+
+    
+    /// <summary>
+    /// Checks the cache for existence of a given file in database 
+    /// </summary>
+    /// <param name="filePath">Path of a file to check</param>
+    /// <returns></returns>
+    public bool HasFilePath(string filePath)
+    {
+        return _cache.HasKey(filePath);
     }
 }

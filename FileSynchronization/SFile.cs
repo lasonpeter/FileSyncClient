@@ -27,7 +27,7 @@ public class SFile
     /// Starts the synchronization procedure for this file object
     /// </summary>
     /// <returns></returns>
-    public bool SyncFile(ref RocksDb rocksDb)
+    public bool SyncFile()
     {
         Guid fuuid;
         Console.WriteLine($"SYNCING FILE, ONCEEEEEEEEE {_filePath}");
@@ -38,8 +38,9 @@ public class SFile
         }
         try
         {
-            var fuuidBytes = rocksDb.Get(Encoding.UTF8.GetBytes(_filePath)); 
-            if(fuuidBytes is null)//Checks if there is a record with specified filepath
+            //var fuuidBytes = rocksDb.Get(Encoding.UTF8.GetBytes(_filePath));
+            var fuuidBytes = DbCache.Instance.GetFuuid(_filePath);
+            if(!DbCache.Instance.HasFilePath(_filePath))//Checks if there is a record with specified filepath
             {//Creates a new hash for the file as well as fuuid
                 Console.WriteLine("Creating new FUUID & hash");
                 ulong hash64;
@@ -49,16 +50,21 @@ public class SFile
                     Console.WriteLine(hash64);
                 }
                 fuuid = Guid.NewGuid();
-                rocksDb.Put(fuuid.ToByteArray(),BitConverter.GetBytes(hash64)); //ALWAYS USE Guid.NewGuid().ToByteArray() to get fuuid
-                rocksDb.Put(Encoding.UTF8.GetBytes(_filePath),fuuid.ToByteArray());
+                
+                //rocksDb.Put(fuuid.ToByteArray(),BitConverter.GetBytes(hash64)); //ALWAYS USE Guid.NewGuid().ToByteArray() to get fuuid
+                DbCache.Instance.SetHash(fuuid,hash64);
+                //rocksDb.Put(Encoding.UTF8.GetBytes(_filePath),fuuid.ToByteArray());
+                DbCache.Instance.SetFuuid(_filePath,fuuid);
                 Console.WriteLine($"Created new FUUID: {fuuid.ToString()}");
             }
             else
             {
-                fuuid = new Guid(fuuidBytes);
+                fuuid = fuuidBytes;
             }
-            byte[] hash = rocksDb.Get(fuuid.ToByteArray());
-            Console.WriteLine($"File with FUUID: {fuuid.ToString()} HASH: {BitConverter.ToUInt64(hash)}");
+
+            ulong hash = DbCache.Instance.GetHash(fuuid);
+            //byte[] hash = rocksDb.Get(fuuid.ToByteArray());
+            Console.WriteLine($"File with FUUID: {fuuid.ToString()} HASH: {hash}");
         }
         catch (Exception e)
         {

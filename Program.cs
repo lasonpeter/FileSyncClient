@@ -45,13 +45,13 @@ class Program
             Console.WriteLine(e);
             throw;
         }
-        RocksDb rocksDb;
         //INITIALIZING DB
+        DbCache dbCache;
         try
         {
             var options = new DbOptions()
                 .SetCreateIfMissing(true);
-            rocksDb = RocksDb.Open(options, "rocks.db");
+            dbCache = new DbCache(RocksDb.Open(options, "rocks.db"));
         }
         catch (Exception e)
         {
@@ -90,7 +90,7 @@ class Program
 
                 tcpClient.Connect(ipAddress, settings.Port);
                 Socket socket = tcpClient.Client;
-                FileSyncController fileSyncController = new FileSyncController(socket,socketLock,rocksDb);
+                FileSyncController fileSyncController = new FileSyncController(socket,socketLock);
                 PacketDistributor packetDistributor = new PacketDistributor(socket);
                 //TODO add a version handshake
                 packetDistributor.OnPing += Ping;
@@ -100,7 +100,7 @@ class Program
                 packetDistributor.VersionHandshake();
                 packetDistributor.Ping();
                 //Start up file watcher
-                FileWatcher fileWatcher = new FileWatcher(fileSyncController,rocksDb);
+                FileWatcher fileWatcher = new FileWatcher(fileSyncController);
                 fileWatcher.LoadSynchronizedObjects(settings.SynchronizedObjects);
                 fileWatcher.AddScanner();
                 fileWatcher.CheckHashesWithServer(
