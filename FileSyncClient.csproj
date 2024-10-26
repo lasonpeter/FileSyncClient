@@ -15,6 +15,7 @@
       <PackageReference Include="RocksDB" Version="9.4.0.50294" />
       <PackageReference Include="Serilog" Version="3.1.1" />
       <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+      <PackageReference Include="TransferLib" Version="0.0.3" />
       <PackageReference Include="XXHash3.NET" Version="2.1.0" />
     </ItemGroup>
 

@@ -29,7 +29,7 @@ public class SFile
     /// <returns></returns>
     public bool SyncFile()
     {
-        Guid fuuid;
+        Guid fuuid = Guid.NewGuid();
         Console.WriteLine($"SYNCING FILE, ONCEEEEEEEEE {_filePath}");
         if (!File.Exists(_filePath))//Checks if file exists
         {
@@ -39,9 +39,8 @@ public class SFile
         try
         {
             //var fuuidBytes = rocksDb.Get(Encoding.UTF8.GetBytes(_filePath));
-            var fuuidBytes = DbCache.Instance.GetFuuid(_filePath);
             if(!DbCache.Instance.HasFilePath(_filePath))//Checks if there is a record with specified filepath
-            {//Creates a new hash for the file as well as fuuid
+            {//Creates a new hash for the file as well as fuuid if a file is NOT in the database yet
                 Console.WriteLine("Creating new FUUID & hash");
                 ulong hash64;
                 using var memoryStream = new MemoryStream();
@@ -49,7 +48,6 @@ public class SFile
                     hash64 = XXHash3.Hash64(File.OpenRead(_filePath));
                     Console.WriteLine(hash64);
                 }
-                fuuid = Guid.NewGuid();
                 
                 //rocksDb.Put(fuuid.ToByteArray(),BitConverter.GetBytes(hash64)); //ALWAYS USE Guid.NewGuid().ToByteArray() to get fuuid
                 DbCache.Instance.SetHash(fuuid,hash64);
@@ -59,9 +57,8 @@ public class SFile
             }
             else
             {
-                fuuid = fuuidBytes;
+                fuuid = DbCache.Instance.GetFuuid(_filePath);
             }
-
             ulong hash = DbCache.Instance.GetHash(fuuid);
             //byte[] hash = rocksDb.Get(fuuid.ToByteArray());
             Console.WriteLine($"File with FUUID: {fuuid.ToString()} HASH: {hash}");

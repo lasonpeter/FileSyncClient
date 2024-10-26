@@ -2,7 +2,6 @@
 using System.Net.Sockets;
 using Newtonsoft.Json;
 using FileSyncClient.Config;
-using FileSyncClient.FileStructureIntrospection;
 using RocksDbSharp;
 using Serilog;
 using TransferLib;
@@ -25,8 +24,6 @@ class Program
                 retainedFileCountLimit: 7, // Optional: Retain the last 7 log files
                 outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level}] {Message}{NewLine}{Exception}")
             .CreateLogger();
-        //TESTING !!!!!!!!!!!!!!!!!!!!!!!!
-        Console.WriteLine("TESINGGGGGGGGGGGGGGGG");
         //LOADING CONFIG
         JsonSerializer jsonSerializer = new JsonSerializer();
         Settings settings;
@@ -92,7 +89,6 @@ class Program
                 Socket socket = tcpClient.Client;
                 FileSyncController fileSyncController = new FileSyncController(socket,socketLock);
                 PacketDistributor packetDistributor = new PacketDistributor(socket);
-                //TODO add a version handshake
                 packetDistributor.OnPing += Ping;
                 packetDistributor.OnFileSyncInitResponse += fileSyncController.StartUpload;
                 packetDistributor.OnFileSyncUploadCheckHashResponse += fileSyncController.FileSyncUploadHashCheckResponse;
@@ -123,8 +119,6 @@ class Program
         return 0;
     }
     
-
-
     public static void Ping(object? sender, PacketEventArgs e)
     {
         //Console.WriteLine("PING EVENT RAISED");

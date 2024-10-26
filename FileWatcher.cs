@@ -140,31 +140,32 @@ public class FileWatcher
                             Console.WriteLine($"Hash: {hash64} fuuid: {fuuid.ToString()}");
                         }
                         if (resp != hash64) //Means that the file changed while the file sync software was inactive or
-                                            //unable to upload it to the server, doesn't update the db as not to flag the file as synced per se
+                                            ////unable to upload it to the server, doesn't update the db as not to flag the file as synced per se
                         {
                             Console.WriteLine("UPDATED");
                             //_rocksDb.Put(fuuid.ToByteArray(),BitConverter.GetBytes(hash64));
                         }
                         hashCheckPairs.Add(new HashCheckPair(){FuuId = fuuid,Hash = resp});
                     }
-                    else
+                    else //if not, adds it to db and checks with server
                     {   
                         //Adds new FP->FUUID and FUUID->HASH
                         var fuuid = Guid.NewGuid();
                         Console.WriteLine($"CREATING NEW {fuuid.ToByteArray().Length}");
                         //Console.WriteLine(BitConverter.ToString(fuuid));
 
-                        DbCache.Instance.SetFuuid(fileInfo.FullName,fuuid);
+                        //DbCache.Instance.SetFuuid(fileInfo.FullName,fuuid);
+                        _fileSyncController.AddNewChange(new FileChange(fileInfo.FullName,FileOperation.FileCreated));
                         //_rocksDb.Put(Encoding.UTF8.GetBytes(fileInfo.FullName),fuuid.ToByteArray());
-                        ulong hash64;
+                        /*ulong hash64;
                         using var memoryStream = new MemoryStream();
                         {
                             hash64 = XXHash3.Hash64(fileInfo.OpenRead());
                             Console.WriteLine(hash64);
-                        }
+                        }*/
                         //_rocksDb.Put(fuuid.ToByteArray(),BitConverter.GetBytes(hash64));
-                        DbCache.Instance.SetHash(fuuid,hash64);
-                        hashCheckPairs.Add(new HashCheckPair(){FuuId = fuuid,Hash = hash64});
+                        //DbCache.Instance.SetHash(fuuid,hash64);
+                        //hashCheckPairs.Add(new HashCheckPair(){FuuId = fuuid,Hash = hash64});
 
                     }
                 }
@@ -176,7 +177,7 @@ public class FileWatcher
 
             if (hashCheckPairs.Count > 5)
             {
-                //Don't know what to do
+                //TODO Don't know what to do
             }
         }
     }
